@@ -26,11 +26,11 @@ plt.axis([-1,1,-2,4])
 plt.xlabel(r'Interaction strength, $g$', fontsize=16)
 plt.ylabel(r'eigenvalues', fontsize=16)
 
-plt.plot(ga, e1,'b-*',linewidth = 2.0, label = 'e1')
+plt.plot(ga, e1,'b-*',linewidth = 2.0, label = 'e1', color = "red")
 plt.plot(ga, -ga,'b-*',linewidth = 2.0, label = '-g',  color = "green")
-plt.plot(ga, exact,'b-*',linewidth = 2.0, label = 'corr', color = "red")
+plt.plot(ga, exact,'b-*',linewidth = 2.0, label = 'corr', color = "blue")
 
-plt.plot(ga, e2,'b-*',linewidth = 2.0, label = 'e2', color = "black")
+plt.plot(ga, e2,'b-*',linewidth = 2.0, label = 'e2', color = "black", linestyle = "dashed")
 
 
 plt.legend()
