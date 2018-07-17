@@ -14,7 +14,7 @@ for x in range(21):
     gmat = np.array([[-g,-g],[-g,2*d-g]])
     gmateigenvalues[x], gmateigenvectors[x] = la.eig(gmat)
     gmatgscorrelationenergy[x] = gmateigenvalues[x,0]-(-g)
-    gmatgroundstateeigenvectorfirstcomponents[x] = abs(gmateigenvectors[x,1,1])
+    gmatgroundstateeigenvectorfirstcomponents[x] = abs(gmateigenvectors[x,0,0])
 plt.figure()
 plt.plot(garray,gmateigenvalues)
 plt.title("Eigenvalues as a function of interaction strength")
