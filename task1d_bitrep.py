@@ -51,28 +51,24 @@ def makepairingmatrix(noofpairs,nooflevels,d,g):
 
 
 def solveeigenvalues(noofpairs,nooflevels,d):
+    noofpoints = 21  
     matrixsize = int(binomial(nooflevels, noofpairs))    
-    garray = np.linspace(-1,1,21) #values of g for which the problem is solved
-    gmateigenvalues = np.zeros(shape=(21,matrixsize)) #setting up other arrays
-    gmateigenvaluessorted = np.zeros(shape=(21,matrixsize))
-    gmatgscorrelationenergy = np.zeros(21)
-    gmateigenvectors = np.zeros(shape=(21,matrixsize,matrixsize))
-    gmatgroundstateeigenvectorfirstcomponents = np.zeros(21)
-    for x in range(21): #solving the eigenvalue problems
+    garray = np.linspace(-1,1,noofpoints) #values of g for which the problem is solved
+    gmateigenvalues = np.zeros(shape=(noofpoints,matrixsize)) #setting up other arrays
+    gmateigenvaluessorted = np.zeros(shape=(noofpoints,matrixsize))
+    gmatgscorrelationenergy = np.zeros(noofpoints)
+    gmateigenvectors = np.zeros(shape=(noofpoints,matrixsize,matrixsize))
+    gmatgroundstateeigenvectorfirstcomponents = np.zeros(noofpoints)
+    for x in range(noofpoints): #solving the eigenvalue problems
         gmateigenvalues[x], gmateigenvectors[x] = la.eig(makepairingmatrix(noofpairs,nooflevels,d,garray[x]))
         gmateigenvaluessorted[x] = np.sort(gmateigenvalues[x])
         gmatgscorrelationenergy[x] = gmateigenvaluessorted[x,0]-(makepairingmatrix(noofpairs,nooflevels,d,garray[x])[0,0]) 
         gmatgroundstateeigenvectorfirstcomponents[x] = abs(gmateigenvectors[x,0,0]) 
-        #if it is needed to sort eigenvectors accordingly something like this can be used:
-        #for i in range(6):
-           #if gmateigenvaluessorted[x,0] != gmateigenvalues[x,i]:
-              #pass
-         #else:
-              #print(i)
-             #gmatgroundstateeigenvectorfirstcomponents[x] = abs(gmateigenvectors[x,i,0])  
-                #break
-    #print(gmateigenvalues)
-    #print(gmateigenvaluessorted)
+        
+        for i in range(matrixsize):
+            if gmateigenvaluessorted[x,0] == gmateigenvalues[x,i]:
+                gmatgroundstateeigenvectorfirstcomponents[x] = abs(gmateigenvectors[x,0,i])
+                break
     
     
     plt.figure() #doing all the plots
@@ -96,7 +92,7 @@ def solveeigenvalues(noofpairs,nooflevels,d):
     #plt.show() 
     plt.savefig("gs_strength.pdf")    
 
-solveeigenvalues(2,4,1)
+solveeigenvalues(4,8,1)
  
 
 
