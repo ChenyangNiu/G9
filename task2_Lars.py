@@ -35,9 +35,10 @@ def pairing_v_as(p,q,r,s,g):
         return 0
 
 
-g = .3
-no_of_states = 14
-no_of_prt = 6
+g = 0.1#.3
+no_of_states = 4
+no_of_prt = 2
+E_C = 100
 
 
 f_h = np.zeros(no_of_prt)
@@ -48,9 +49,10 @@ for a in range(len(f_p)):
     f_p[a] = sp_f(a + no_of_prt,g,fermi_level_number(no_of_prt))
 
 v_pp_hh = np.zeros(shape=(no_of_states-no_of_prt, no_of_states-no_of_prt, no_of_prt, no_of_prt))
+v_hh_pp = np.zeros(shape=(no_of_prt, no_of_prt, no_of_states-no_of_prt, no_of_states-no_of_prt)) #can be removed when changing v_hh_pp to v_pp_hh in einsum (use correct indices)
 v_hh_hh = np.zeros(shape=(no_of_prt, no_of_prt, no_of_prt, no_of_prt))
 v_pp_pp = np.zeros(shape=(no_of_states-no_of_prt, no_of_states-no_of_prt, no_of_states-no_of_prt, no_of_states-no_of_prt))
-for matrix in [v_pp_hh, v_hh_hh, v_pp_pp]:
+for matrix in [v_pp_hh, v_hh_hh, v_pp_pp, v_hh_pp]: #v_hh_pp can be removed when changing v_hh_pp to v_pp_hh in einsum (use correct indices)
     for p in range(np.size(matrix,0)):
         for q in range(np.size(matrix,1)):
             for r in range(np.size(matrix,2)):
@@ -65,35 +67,57 @@ for a in range(np.size(f_sign_sum,0)):
                 f_sign_sum[a,b,i,j] = f_p[a] + f_p[b] - f_h[i] - f_h[j]
 
 t_2 = np.zeros(shape=(no_of_states-no_of_prt, no_of_states-no_of_prt, no_of_prt, no_of_prt))
-for a in range(np.size(t_2,0)):
-    for b in range(np.size(t_2,1)):
-        for i in range(np.size(t_2,2)):
-            for j in range(np.size(t_2,3)):
-                t_2[a,b,i,j] = v_pp_hh[a,b,i,j]/f_sign_sum[a,b,i,j]
+t_2 = v_pp_hh/f_sign_sum
 
 h_bar = np.zeros(shape=(no_of_states-no_of_prt, no_of_states-no_of_prt, no_of_prt, no_of_prt))
-                
-#print(f_h)
-#print(t_2[2,3,:,:])
-#print(v_pp_hh[2,3,:,:])
 
-def give_next_t_2(t_2):    
+
+def give_next_t_2(t_2_r):    
+    intermediate_small = np.zeros(shape=(no_of_states-no_of_prt, no_of_states-no_of_prt))  
+    intermediate_big = np.zeros(shape=(no_of_prt, no_of_states-no_of_prt, no_of_states-no_of_prt, no_of_prt)) 
+    
     h_bar = v_pp_hh \
-        + np.einsum('b,abij->abij',f_p,t_2) - np.einsum('a,baij->abij',f_p,t_2) \
-        - np.einsum('j,abij->abij',f_p,t_2) + np.einsum('i,abji->abij',f_p,t_2)
-    delta_t_2 = h_bar / f_sign_sum #element-wise division
-    return t_2 + delta_t_2
+        + np.einsum('b,abij->abij',f_p,t_2_r) - np.einsum('a,baij->abij',f_p,t_2_r) \
+        - np.einsum('j,abij->abij',f_p,t_2_r) + np.einsum('i,abji->abij',f_p,t_2_r) \
+        + 1/2 * np.einsum('abcd,cdij->abij',v_pp_pp,t_2_r) \
+        + 1/2 * np.einsum('klij,abkl->abij',v_hh_hh,t_2_r) #up to here there are all terms independent of and linear in t
+    
+    intermediate_big = np.einsum('klcd,dblj->kbcj',v_hh_pp,t_2_r)    
+    intermediate_small = np.einsum('klcd,cdik->li',v_hh_pp,t_2_r)
+    
+    h_bar = h_bar \
+        + 1/2 * ( np.einsum('kbcj,acik->abij',intermediate_big,t_2_r) - np.einsum('kacj,bcik->abij',intermediate_big,t_2_r) - np.einsum('kbci,acjk->abij',intermediate_big,t_2_r) + np.einsum('kaci,bcjk->abij',intermediate_big,t_2_r) ) \
+        + 1/2 * ( np.einsum('li,ablj->abij',intermediate_small,t_2_r) - np.einsum('lj,abli->abij',intermediate_small,t_2_r) ) #up to here there are all terms except for the last two quadratic terms
+    
+    intermediate_big = np.einsum('klcd,abkl->abcd',v_hh_pp,t_2_r)    
+    intermediate_small = np.einsum('klcd,ackl->ad',v_hh_pp,t_2_r)
+    
+    h_bar = h_bar \
+        + 1/2 * ( np.einsum('ad,dbij->abij',intermediate_small,t_2_r) - np.einsum('bd,daij->abij',intermediate_small,t_2_r) ) \
+        + 1/4 * np.einsum('abcd,cdij->abij',intermediate_big,t_2_r) 
+        
+    delta_t_2_r = h_bar / f_sign_sum #element-wise division
+    return t_2_r + delta_t_2_r
 
-print(h_bar[1,0])
-print(f_p[0]*t_2[1,0,:,:])
+def recursion(accuracy,maxit,t_2_r=t_2,E_C_r=E_C,it_no=0):
+    E_C_old = E_C_r
+    t_2_r = give_next_t_2(t_2_r)
+    E_C_r = 1/4 * np.einsum('ijab,abij->',v_hh_pp,t_2_r)
+    if abs(E_C_r - E_C_old) < accuracy:
+        print("After ", it_no , "recursion steps the following result was reached:" , E_C_r)
+        print("The residuum is" , E_C_r - E_C_old)
+    elif it_no > maxit:
+        print("Number of iterations exceeds set value maxit")
+    else: 
+        it_no += 1
+        recursion(accuracy,maxit,t_2_r=t_2_r,E_C_r=E_C_r,it_no=it_no)
+    
+recursion(0.0001,110)   
+    
+    
+
+#print(h_bar[1,0])
+#print(t_2[2,3,:,:])
 
 
-
-
-#print(V[2,3,no_of_prt:,no_of_prt:])
-#print(t[0,1])
-
-#fl = fermi_level_number(no_of_prt)    
-#testest = np.einsum('cd,cd->',V[2,3,no_of_prt:,no_of_prt:],t[0,1])
-#print(testest)
  
