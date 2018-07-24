@@ -27,17 +27,16 @@ def sp_f(p,g,fermi_level):
 def pairing_v_as(p,q,r,s,g):
     if p > q:
         return - pairing_v_as(q,p,r,s,g)
-    elif s > r:
+    elif r > s:
         return - pairing_v_as(p,q,s,r,g)    
     elif math.floor(p/2) == math.floor(q/2) and math.floor(r/2) == math.floor(s/2) and p != q and r != s:
         return -g/2
     else:
         return 0
 
-
-g = 0.1#.3
-no_of_states = 4
-no_of_prt = 2
+g = 1#.003
+no_of_states = 12
+no_of_prt = 6
 E_C = 100
 
 
@@ -72,32 +71,24 @@ t_2 = v_pp_hh/f_sign_sum
 h_bar = np.zeros(shape=(no_of_states-no_of_prt, no_of_states-no_of_prt, no_of_prt, no_of_prt))
 
 
-def give_next_t_2(t_2_r):    
-    intermediate_small = np.zeros(shape=(no_of_states-no_of_prt, no_of_states-no_of_prt))  
-    intermediate_big = np.zeros(shape=(no_of_prt, no_of_states-no_of_prt, no_of_states-no_of_prt, no_of_prt)) 
+def give_next_t_2(t_2_r):        
+    intermediate_big_1 = np.einsum('klcd,dblj->kbcj',v_hh_pp,t_2_r)   
+    intermediate_small_1 = np.einsum('klcd,cdik->li',v_hh_pp,t_2_r)    
+    intermediate_big_2 = np.einsum('klcd,abkl->abcd',v_hh_pp,t_2_r)   
+    intermediate_small_2 = np.einsum('klcd,ackl->ad',v_hh_pp,t_2_r)    
     
     h_bar = v_pp_hh \
         + np.einsum('b,abij->abij',f_p,t_2_r) - np.einsum('a,baij->abij',f_p,t_2_r) \
-        - np.einsum('j,abij->abij',f_p,t_2_r) + np.einsum('i,abji->abij',f_p,t_2_r) \
+        - np.einsum('j,abij->abij',f_h,t_2_r) + np.einsum('i,abji->abij',f_h,t_2_r) \
         + 1/2 * np.einsum('abcd,cdij->abij',v_pp_pp,t_2_r) \
-        + 1/2 * np.einsum('klij,abkl->abij',v_hh_hh,t_2_r) #up to here there are all terms independent of and linear in t
-    
-    intermediate_big = np.einsum('klcd,dblj->kbcj',v_hh_pp,t_2_r)    
-    intermediate_small = np.einsum('klcd,cdik->li',v_hh_pp,t_2_r)
-    
-    h_bar = h_bar \
-        + 1/2 * ( np.einsum('kbcj,acik->abij',intermediate_big,t_2_r) - np.einsum('kacj,bcik->abij',intermediate_big,t_2_r) - np.einsum('kbci,acjk->abij',intermediate_big,t_2_r) + np.einsum('kaci,bcjk->abij',intermediate_big,t_2_r) ) \
-        + 1/2 * ( np.einsum('li,ablj->abij',intermediate_small,t_2_r) - np.einsum('lj,abli->abij',intermediate_small,t_2_r) ) #up to here there are all terms except for the last two quadratic terms
-    
-    intermediate_big = np.einsum('klcd,abkl->abcd',v_hh_pp,t_2_r)    
-    intermediate_small = np.einsum('klcd,ackl->ad',v_hh_pp,t_2_r)
-    
-    h_bar = h_bar \
-        + 1/2 * ( np.einsum('ad,dbij->abij',intermediate_small,t_2_r) - np.einsum('bd,daij->abij',intermediate_small,t_2_r) ) \
-        + 1/4 * np.einsum('abcd,cdij->abij',intermediate_big,t_2_r) 
+        + 1/2 * np.einsum('klij,abkl->abij',v_hh_hh,t_2_r) \
+        + 1/2 * ( np.einsum('kbcj,acik->abij',intermediate_big_1,t_2_r) - np.einsum('kacj,bcik->abij',intermediate_big_1,t_2_r) - np.einsum('kbci,acjk->abij',intermediate_big_1,t_2_r) + np.einsum('kaci,bcjk->abij',intermediate_big_1,t_2_r) ) \
+        + 1/2 * ( np.einsum('li,ablj->abij',intermediate_small_1,t_2_r) - np.einsum('lj,abli->abij',intermediate_small_1,t_2_r) ) \
+        + 1/2 * ( np.einsum('ad,dbij->abij',intermediate_small_2,t_2_r) - np.einsum('bd,daij->abij',intermediate_small_2,t_2_r) ) \
+        + 1/4 * np.einsum('abcd,cdij->abij',intermediate_big_2,t_2_r) 
         
     delta_t_2_r = h_bar / f_sign_sum #element-wise division
-    return t_2_r + delta_t_2_r
+    return (t_2_r + delta_t_2_r)
 
 def recursion(accuracy,maxit,t_2_r=t_2,E_C_r=E_C,it_no=0):
     E_C_old = E_C_r
@@ -107,17 +98,15 @@ def recursion(accuracy,maxit,t_2_r=t_2,E_C_r=E_C,it_no=0):
         print("After ", it_no , "recursion steps the following result was reached:" , E_C_r)
         print("The residuum is" , E_C_r - E_C_old)
     elif it_no > maxit:
-        print("Number of iterations exceeds set value maxit")
+        print("Number of iterations exceeds set value maxit = ", maxit)
+        print("Unconverged result is:", E_C_r)
     else: 
         it_no += 1
         recursion(accuracy,maxit,t_2_r=t_2_r,E_C_r=E_C_r,it_no=it_no)
+        
+#give_next_t_2(t_2)        
     
-recursion(0.0001,110)   
-    
-    
-
-#print(h_bar[1,0])
-#print(t_2[2,3,:,:])
+recursion(0.00001,25)   
 
 
  
