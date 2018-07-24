@@ -1,10 +1,7 @@
 #this file computes the pairing matrix for a given number of pairs and levels and solves the eigenvalue problem
 import numpy as np
-from numpy import linalg as la
-from sympy.utilities.iterables import multiset_permutations as mup
 import matplotlib.pyplot as plt
 import math
-import array
 
 d = 1
 
@@ -19,9 +16,11 @@ def fermi_level_number(no_of_prt):
 def sp_f(p,g,fermi_level):
     #Equation 1.4 of CCM-minted.pdf
     if p > fermi_level: #unoccupied states (particles)
-        return math.ceil( (p-fermi_level)/2 )*d
+        return math.floor( p/2 )*d
+    #old was: math.ceil( (p-fermi_level)/2 )*d
     else: #occupied states (holes)
-        return math.ceil( (p-fermi_level)/2 )*d - g/2    
+        return math.floor( p/2 )*d - g/2  
+    #old was: math.ceil( (p-fermi_level)/2 )*d - g/2 
 
 
 def pairing_v_as(p,q,r,s,g):
@@ -34,9 +33,9 @@ def pairing_v_as(p,q,r,s,g):
     else:
         return 0
 
-g = 1#.003
+g = -.6
 no_of_states = 12
-no_of_prt = 6
+no_of_prt = 4
 E_C = 100
 
 
@@ -66,7 +65,7 @@ for a in range(np.size(f_sign_sum,0)):
                 f_sign_sum[a,b,i,j] = f_p[a] + f_p[b] - f_h[i] - f_h[j]
 
 t_2 = np.zeros(shape=(no_of_states-no_of_prt, no_of_states-no_of_prt, no_of_prt, no_of_prt))
-t_2 = v_pp_hh/f_sign_sum
+t_2 = -v_pp_hh/f_sign_sum #in the lecture notes it says v_pp_hh/f_sign_sum
 
 h_bar = np.zeros(shape=(no_of_states-no_of_prt, no_of_states-no_of_prt, no_of_prt, no_of_prt))
 
@@ -86,8 +85,11 @@ def give_next_t_2(t_2_r):
         + 1/2 * ( np.einsum('li,ablj->abij',intermediate_small_1,t_2_r) - np.einsum('lj,abli->abij',intermediate_small_1,t_2_r) ) \
         + 1/2 * ( np.einsum('ad,dbij->abij',intermediate_small_2,t_2_r) - np.einsum('bd,daij->abij',intermediate_small_2,t_2_r) ) \
         + 1/4 * np.einsum('abcd,cdij->abij',intermediate_big_2,t_2_r) 
-        
-    delta_t_2_r = h_bar / f_sign_sum #element-wise division
+    
+    print(h_bar[0,1])    
+    delta_t_2_r = -h_bar / f_sign_sum #the lecture says h_bar / f_sign_sum #element-wise division
+    print(delta_t_2_r[0,1])
+    print((t_2_r + delta_t_2_r)[0,1]) 
     return (t_2_r + delta_t_2_r)
 
 def recursion(accuracy,maxit,t_2_r=t_2,E_C_r=E_C,it_no=0):
@@ -103,10 +105,9 @@ def recursion(accuracy,maxit,t_2_r=t_2,E_C_r=E_C,it_no=0):
     else: 
         it_no += 1
         recursion(accuracy,maxit,t_2_r=t_2_r,E_C_r=E_C_r,it_no=it_no)
-        
-#give_next_t_2(t_2)        
+
     
-recursion(0.00001,25)   
+recursion(0.00001,50)   
 
 
  
