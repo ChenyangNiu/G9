@@ -97,7 +97,7 @@ def recursion(accuracy,maxit,t_2,E_C_r,it_no, f_h, f_p, v_hh_pp, v_hh_hh, v_pp_p
         print("Unconverged result is:", E_C_r)
     else: #otherwise continue recursion
         it_no += 1
-        recursion(accuracy,maxit,t_2,E_C_r,it_no,f_h, f_p, v_hh_pp, v_hh_hh, v_pp_pp, f_sign_sum)
+        return recursion(accuracy,maxit,t_2,E_C_r,it_no,f_h, f_p, v_hh_pp, v_hh_hh, v_pp_pp, f_sign_sum)
         
 
 def pairing_ccd_main(no_of_prt, no_of_states, g, accuracy, maxit):
