@@ -61,7 +61,7 @@ def matrix_setup(no_of_prt,no_of_states,g):
     return f_h, f_p, v_hh_pp, v_hh_hh, v_pp_pp, f_sign_sum, t_2
 
 
-def give_next_t_2(t_2, f_h, f_p, v_hh_pp, v_hh_hh, v_pp_pp, f_sign_sum):  
+def give_next_t_2(t_2, f_h, f_p, v_hh_pp, v_hh_hh, v_pp_pp, f_sign_sum, mixing):  
     """gives back the resulting t_2 from one iteration""" #Eq. 1.36 from CCM-minted.pdf
     intermediate_big_1 = np.einsum('klcd,dblj->kbcj',v_hh_pp,t_2) #Intermediates for more efficient calculation of h_bar
     intermediate_small_1 = np.einsum('klcd,cdik->li',v_hh_pp,t_2)    
@@ -80,32 +80,32 @@ def give_next_t_2(t_2, f_h, f_p, v_hh_pp, v_hh_hh, v_pp_pp, f_sign_sum):
         + 1/4 * np.einsum('abcd,cdij->abij',intermediate_big_2,t_2) 
     
     delta_t_2 = h_bar / f_sign_sum 
-    return (t_2 + delta_t_2) #new value of t_2 is old value plus correction delta_t_2
+    return (t_2 + mixing * delta_t_2) #new value of t_2 is old value plus correction delta_t_2 
 
 
-def recursion(accuracy,maxit,t_2,E_C_r,it_no, f_h, f_p, v_hh_pp, v_hh_hh, v_pp_pp, f_sign_sum):
+def recursion(accuracy,maxit,t_2,E_C_r,it_no, f_h, f_p, v_hh_pp, v_hh_hh, v_pp_pp, f_sign_sum, mixing):
     """calls give_next_t_2 until the resulting energy doesn't change more than specified with accuracy"""
     E_C_old = E_C_r #set E_C_old to last E_C value
-    t_2 = give_next_t_2(t_2, f_h, f_p, v_hh_pp, v_hh_hh, v_pp_pp, f_sign_sum) #calculate new iteration for t_2
+    t_2 = give_next_t_2(t_2, f_h, f_p, v_hh_pp, v_hh_hh, v_pp_pp, f_sign_sum, mixing) #calculate new iteration for t_2
     E_C_r = 1/4 * np.einsum('ijab,abij->',v_hh_pp,t_2) #calculate new value for E_C
     if abs(E_C_r - E_C_old) < accuracy: #stop recursion when desired accuracy is reached
-        print("After ", it_no , "recursion steps the following result was reached:" , E_C_r)
-        print("The residuum is" , E_C_r - E_C_old)
+        print("  After ", it_no , "recursion steps the following result is reached by CCD:" , E_C_r)
+        print("  The residuum is" , E_C_r - E_C_old)
         return E_C_r 
     elif it_no > maxit: #stop recursion when set value of maximal iterations is exceeded
-        print("Number of iterations exceeds set value maxit = ", maxit)
-        print("Unconverged result is:", E_C_r)
+        print("  Number of iterations exceeds set value maxit = ", maxit)
+        print("  Unconverged result is:", E_C_r)
     else: #otherwise continue recursion
         it_no += 1
-        return recursion(accuracy,maxit,t_2,E_C_r,it_no,f_h, f_p, v_hh_pp, v_hh_hh, v_pp_pp, f_sign_sum)
+        return recursion(accuracy,maxit,t_2,E_C_r,it_no,f_h, f_p, v_hh_pp, v_hh_hh, v_pp_pp, f_sign_sum, mixing)
         
 
-def pairing_ccd_main(no_of_prt, no_of_states, g, accuracy, maxit):
+def pairing_ccd_main(no_of_prt, no_of_states, g, accuracy, maxit, mixing):
     """main function for CCD calculation for the pairing model"""
     f_h, f_p, v_hh_pp, v_hh_hh, v_pp_pp, f_sign_sum, t_2 = matrix_setup(no_of_prt,no_of_states,g)
     E_C = 100    
-    res_E_C = recursion(accuracy, maxit, t_2, E_C, 0, f_h, f_p, v_hh_pp, v_hh_hh, v_pp_pp, f_sign_sum)
-    print(res_E_C)
+    res_E_C = recursion(accuracy, maxit, t_2, E_C, 0, f_h, f_p, v_hh_pp, v_hh_hh, v_pp_pp, f_sign_sum, mixing)
+    #print(res_E_C)
     return res_E_C
 
   

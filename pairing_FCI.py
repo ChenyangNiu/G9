@@ -115,7 +115,7 @@ def pairing_fci_main(no_of_prt,no_of_states,g):
             g_ground_state_eigenvector_first_component = abs(g_eigenvectors[0,i])
             break
     
-    print(g_gs_correlation_energy)
+    print("  The FCI result for the correlation energy is ", g_gs_correlation_energy)
     return g_gs_correlation_energy
 
 
