@@ -92,7 +92,6 @@ def solveeigenvalues(noofpairs,nooflevels,d):
     #plt.show() 
     plt.savefig("gs_strength.pdf")    
 
-solveeigenvalues(4,8,1)
  
 
 
