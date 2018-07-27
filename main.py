@@ -16,7 +16,7 @@ def compare_methods_diff_g(no_of_prt, no_of_states, g_min, g_max, no_of_g_points
         fci_E_C[x] = fci.pairing_fci_main(no_of_prt, no_of_states, g_array[x])    
         ccd_E_C[x] = ccd.pairing_ccd_main(no_of_prt, no_of_states, g_array[x], ccd_accuracy, ccd_maxit, ccd_mixing)
 
-    ccd_to_fci_ratio = ccd_E_C / fci_E_C
+    ccd_to_fci_ratio = 1 - ccd_E_C / fci_E_C
     
     plt.figure() #figsize=(8,5)
     plt.xlabel(r'Interaction strength $g$', fontsize=14)
@@ -68,5 +68,5 @@ def compare_methods_diff_states(no_of_prt, no_of_states_min, no_of_states_max, g
 #ccd.pairing_ccd_main(4, 8, .5, .00001, 100,1)
 #fci.pairing_fci_main(4, 8, .5)
     
-#compare_methods_diff_g(4, 8, -1.5, 1.5, 61, .00001, 1000, .3)
-compare_methods_diff_states(4, 6, 20, .5, .00001, 1000, 1)
+compare_methods_diff_g(4, 8, -1.5, 1.5, 61, 10**(-9), 1000, .3)
+#compare_methods_diff_states(4, 6, 20, .5, .00001, 1000, 1)
