@@ -51,10 +51,11 @@ def make_sp_states(n_max, A_magic, en_magic):
     #print(prt_sp_states)
     return hole_sp_states, prt_sp_states
 
+
 def make_tp_states(n_max, A_magic, en_magic):
     hole_sp_states, prt_sp_states = make_sp_states(n_max, A_magic, en_magic)
     
-    hh_states = np.zeros(shape=( A_magic*(A_magic-1) ,8))
+    hh_states = np.zeros(shape=( A_magic*(A_magic-1) ,8)) #this is a list of all hh states with center-of-mass and relative momentum
     k = 0
     for i in range(A_magic):
         for j in range(A_magic):
@@ -65,11 +66,30 @@ def make_tp_states(n_max, A_magic, en_magic):
                 hh_states[k, 6] = hole_sp_states[i, 3]
                 hh_states[k, 7] = hole_sp_states[j, 3]
                 k += 1
-            
-    #pp_states = np.zeros(shape=( (grid_dim-A_magic)*(grid_dim-A_magic-1) ,8))                
-            
-    print(hh_states[0:2])
-    print(hh_states[-1])
-    return hh_states
+    
+    hh_com_momenta = np.zeros(shape=(0 ,4)) #this a list of center-of-mass momenta of all hh states; the last entry will later contain the number of correponding states
+    for n_x in range(-n_max, n_max+1):
+        for n_y in range(-n_max, n_max+1):
+            for n_z in range(-n_max, n_max+1):
+                if abs(n_x) + abs(n_y) + abs(n_z) <= 2*en_magic**(1/2):
+                    hh_com_momenta = np.append(hh_com_momenta,[[n_x,n_y,n_z,0]],axis=0)
+    
+    hh_channel_states = np.zeros(shape=( A_magic*(A_magic-1) ,5)) #this is a list of all hh states with relative momentum, where the states are sorted according to their total momentum (channel)
+    l = 0
+    for cm in hh_com_momenta:
+        old_l = l
+        for st in hh_states: 
+            if np.array_equal(st[0:3],cm[0:3]):
+                hh_channel_states[l] = st[3:8]
+                l += 1
+                print(l)
+        hh_com_momenta[i,3] = l - old_l
+
+    #print(hh_channel_states)             
+    print(hh_com_momenta)
+    print(len(hh_com_momenta))
+                                     
+    return hh_com_momenta, hh_channel_states
+
     
 make_tp_states(n_max, A_magic, en_magic)
