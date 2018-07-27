@@ -69,4 +69,4 @@ def compare_methods_diff_states(no_of_prt, no_of_states_min, no_of_states_max, g
 #fci.pairing_fci_main(4, 8, .5)
     
 #compare_methods_diff_g(4, 8, -1.5, 1.5, 61, .00001, 1000, .3)
-compare_methods_diff_states(4, 4, 30, .5, .00001, 1000, 1)
+compare_methods_diff_states(4, 6, 20, .5, .00001, 1000, 1)
