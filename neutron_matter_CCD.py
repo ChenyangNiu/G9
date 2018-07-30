@@ -2,7 +2,8 @@
 import numpy as np
 import math
 
-#hbarc = 197.32697
+hbarc = 197.32697
+mass = 939.56541 #neutron mass
 A_magic = 14
 en_magic = 1 #maximal k**2 (k_Fermi) for states within A_magic
 density = 0.1
@@ -12,7 +13,7 @@ n_max = 2
 
 
 def check_n_max(n_max):
-    if 2 * math.pi * n_max / grid_spacing <= momentum_cutoff:
+    if 2 * math.pi * n_max / grid_spacing <= 1.5 * momentum_cutoff:
         print("n_max is too small")
         
    
@@ -22,9 +23,8 @@ def grid_dim(n_max):
 
 def make_sp_states(n_max, A_magic, en_magic):
     """This makes all hole and particle single-body states."""
-    #all_sp_states = np.zeros(shape=(grid_dim,4))
-    hole_sp_states = np.zeros(shape=(A_magic,4))
-    prt_sp_states = np.zeros(shape=(grid_dim(n_max) - A_magic,4))    
+    hole_sp_states = np.zeros(shape=(A_magic,4), dtype=int)
+    prt_sp_states = np.zeros(shape=(grid_dim(n_max) - A_magic,4), dtype=int)    
     m_s = -1
     n_z = -n_max
     n_y = -n_max
@@ -110,7 +110,7 @@ def make_tp_states(n_max, A_magic, en_magic):
     
     #ph:
     ph_com_momenta = np.zeros(shape=(0 ,5), dtype=int) #this a list of center-of-mass momenta of all ph states; the last entries will later contain the number of correponding states    
-    ph_states = np.zeros(shape=( A_magic*(grid_dim(n_max) - A_magic) ,8)) #this is a list of all ph states with center-of-mass and relative momentum
+    ph_states = np.zeros(shape=( A_magic*(grid_dim(n_max) - A_magic) ,8), dtype=int) #this is a list of all ph states with center-of-mass and relative momentum
     k = 0
     for i in range(grid_dim(n_max) - A_magic):
         for j in range(A_magic):
@@ -159,7 +159,9 @@ def load_tp_states(n_max, A_magic, en_magic):
     com_momenta = np.load("com_momenta-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+".npy")
     hh_channel_states = np.load("hh_channel_states-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+".npy")
     pp_channel_states = np.load("pp_channel_states-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+".npy")
-    return com_momenta, hh_channel_states, pp_channel_states
+    ph_com_momenta = np.load("ph_com_momenta-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+".npy")
+    ph_channel_states = np.load("ph_channel_states-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+".npy")
+    return com_momenta, hh_channel_states, pp_channel_states, ph_com_momenta, ph_channel_states
     
 
 def give_minnesota_constants(grid_spacing):
@@ -168,12 +170,13 @@ def give_minnesota_constants(grid_spacing):
     r_exp = 1/(4*1.487)
     s_exp = 1/(4*0.465)
     q_square_factor = (math.pi / grid_spacing) ** 2 #1/2 of q cancles with 2 of 2 pi
-    return r_factor, s_factor, r_exp, s_exp, q_square_factor
+    f_factor = 2 * hbarc**2 / mass * q_square_factor
+    return r_factor, s_factor, r_exp, s_exp, q_square_factor, f_factor
 
 
 def give_neutron_minnesota_V(bra_rel_numbers,bra_s_1,bra_s_2,ket_rel_numbers,ket_s_1,ket_s_2, r_factor,s_factor, r_exp,s_exp, q_square_factor):
     """Calculate the Minnesota matrix element for two-body states bra and ket."""
-    if bra_s_1 == bra_s_2 or ket_s_1 == ket_s_2:  
+    if bra_s_1 == bra_s_2 or ket_s_1 == ket_s_2: #this also accounts for Pauli principle
         return 0
     elif bra_s_1 == ket_s_1: # then automatically bra_s_2 == ket_s_2 holds
         q_mi_square = q_square_factor * np.einsum('i,i->', (bra_rel_numbers - ket_rel_numbers), (bra_rel_numbers - ket_rel_numbers))
@@ -182,17 +185,45 @@ def give_neutron_minnesota_V(bra_rel_numbers,bra_s_1,bra_s_2,ket_rel_numbers,ket
                 + r_factor * math.exp(- q_pl_square * r_exp) + s_factor * math.exp(- q_pl_square * s_exp)) #antisymmetrized matrix element
     else: # then automatically bra_s_1 == ket_s_2 and bra_s_2 == ket_s_1 holds
         return - give_neutron_minnesota_V(bra_rel_numbers,bra_s_2,bra_s_1,ket_rel_numbers,ket_s_1,ket_s_2, r_factor,s_factor, r_exp,s_exp, q_square_factor)   
+
+
         
+def give_sp_f(com_numbers, state_numbers, which_spin_number, r_factor, s_factor, r_exp, s_exp, q_square_factor, f_factor, n_max, A_magic, en_magic, grid_spacing):
+    hole_sp_states, prt_sp_states = make_sp_states(n_max, A_magic, en_magic)
+    sp_momentum_numbers = (com_numbers + (-1)**which_spin_number * state_numbers[0:3])/2 #this is the resulting single-particle momentum expressed in n's
+    kin_energy = f_factor * np.einsum('i,i->', sp_momentum_numbers, sp_momentum_numbers)  
+    pot_sum_energy = 0 
+    for st in hole_sp_states: 
+        pot_sum_energy += give_neutron_minnesota_V(st[0:3] - sp_momentum_numbers, st[3], state_numbers[which_spin_number + 3], st[0:3] - sp_momentum_numbers, st[3], state_numbers[which_spin_number + 3], r_factor,s_factor, r_exp,s_exp, q_square_factor)
+    return kin_energy + pot_sum_energy        
+    
 
 def matrix_setup(n_max, A_magic, en_magic, grid_spacing):
-    """Sets up F, V, and T_2 as matrices.""" #currently only V
-    com_momenta, hh_channel_states, pp_channel_states = load_tp_states(n_max, A_magic, en_magic)#make_tp_states(n_max, A_magic, en_magic)
-    r_factor, s_factor, r_exp, s_exp, q_square_factor = give_minnesota_constants(grid_spacing)
+    """Sets up F, V, and T_2 as matrices.""" 
+    com_momenta, hh_channel_states, pp_channel_states, ph_com_momenta, ph_channel_states = load_tp_states(n_max, A_magic, en_magic)#make_tp_states(n_max, A_magic, en_magic)
+    r_factor, s_factor, r_exp, s_exp, q_square_factor,f_factor = give_minnesota_constants(grid_spacing)
     no_of_com_momenta = len(com_momenta)
+    no_of_ph_com_momenta = len(ph_com_momenta)
+    f_h_list = []
+    f_p_list = []
     v_pp_hh_list = []
     v_hh_hh_list = []
     v_pp_pp_list = []
     v_ph_ph_list = []
+    f_sign_sum_list = []
+    t_2_list = []
+    
+    for i in range(no_of_com_momenta):
+        f_h_list.append(np.zeros(shape=(com_momenta[i,4],2)))
+        for j in range(com_momenta[i,3],com_momenta[i,3]+com_momenta[i,4]):
+            f_h_list[i][j - int(com_momenta[i,3]), 0] = give_sp_f(com_momenta[i,0:3], hh_channel_states[j], 0, r_factor, s_factor, r_exp, s_exp, q_square_factor, f_factor, n_max, A_magic, en_magic, grid_spacing)
+            f_h_list[i][j - int(com_momenta[i,3]), 1] = give_sp_f(com_momenta[i,0:3], hh_channel_states[j], 1, r_factor, s_factor, r_exp, s_exp, q_square_factor, f_factor, n_max, A_magic, en_magic, grid_spacing)
+            
+    for i in range(no_of_com_momenta):
+        f_p_list.append(np.zeros(shape=(com_momenta[i,6],2)))
+        for j in range(com_momenta[i,5],com_momenta[i,5]+com_momenta[i,6]):
+            f_p_list[i][j - int(com_momenta[i,5]), 0] = give_sp_f(com_momenta[i,0:3], pp_channel_states[j], 0, r_factor, s_factor, r_exp, s_exp, q_square_factor, f_factor, n_max, A_magic, en_magic, grid_spacing)
+            f_p_list[i][j - int(com_momenta[i,5]), 1] = give_sp_f(com_momenta[i,0:3], pp_channel_states[j], 1, r_factor, s_factor, r_exp, s_exp, q_square_factor, f_factor, n_max, A_magic, en_magic, grid_spacing)
     
     for i in range(no_of_com_momenta):
         v_pp_hh_list.append(np.zeros(shape=(com_momenta[i,6], com_momenta[i,4])))
@@ -209,37 +240,64 @@ def matrix_setup(n_max, A_magic, en_magic, grid_spacing):
         for j in range(com_momenta[i,5],com_momenta[i,5]+com_momenta[i,6]):
             for k in range(com_momenta[i,5],com_momenta[i,5]+com_momenta[i,6]):
                 v_pp_pp_list[i][j - int(com_momenta[i,5]), k - int(com_momenta[i,5])] = give_neutron_minnesota_V(pp_channel_states[j,0:3],pp_channel_states[j,3],pp_channel_states[j,4], pp_channel_states[k,0:3],pp_channel_states[k,3],pp_channel_states[k,4], r_factor,s_factor, r_exp,s_exp, q_square_factor)
-                
-    return v_pp_hh_list, v_hh_hh_list, v_pp_pp_list#, v_ph_ph_list
             
+    #for i in range(no_of_ph_com_momenta):                
+        #v_ph_ph_list.append(np.zeros(shape=(ph_com_momenta[i,4], ph_com_momenta[i,4])))
+        #for j in range(ph_com_momenta[i,3],ph_com_momenta[i,3]+ph_com_momenta[i,4]):
+            #for k in range(ph_com_momenta[i,3],ph_com_momenta[i,3]+ph_com_momenta[i,4]):
+                #v_ph_ph_list[i][j - int(ph_com_momenta[i,3]), k - int(ph_com_momenta[i,3])] = give_neutron_minnesota_V(ph_channel_states[j,0:3],ph_channel_states[j,3],ph_channel_states[j,4], ph_channel_states[k,0:3],ph_channel_states[k,3],ph_channel_states[k,4], r_factor,s_factor, r_exp,s_exp, q_square_factor)
+        
+    for i in range(no_of_com_momenta):
+        f_sign_sum_list.append(np.zeros(shape=(com_momenta[i,6], com_momenta[i,4])))
+        for j in range(com_momenta[i,5],com_momenta[i,5]+com_momenta[i,6]):
+            for k in range(com_momenta[i,3],com_momenta[i,3]+com_momenta[i,4]):
+                f_sign_sum_list[i][j - int(com_momenta[i,5]), k - int(com_momenta[i,3])] = f_h_list[i][k - int(com_momenta[i,3]), 0] + f_h_list[i][k - int(com_momenta[i,3]), 1] - f_p_list[i][j - int(com_momenta[i,5]), 0] - f_p_list[i][j - int(com_momenta[i,5]), 1]
+    
+    for i in range(no_of_com_momenta):
+        t_2_list.append([0])
+        t_2_list[i] = v_pp_hh_list[i] / f_sign_sum_list[i]
+            
+    return v_pp_hh_list, v_hh_hh_list, v_pp_pp_list, v_ph_ph_list, f_h_list, f_p_list, f_sign_sum_list, t_2_list   
+
 
 def save_matrices(n_max, A_magic, en_magic, grid_spacing):
     """This function saves calculated matrices. They can be loaded with load_matrices, which is much faster than recalculating them again."""
-    v_pp_hh_list, v_hh_hh_list, v_pp_pp_list = matrix_setup(n_max, A_magic, en_magic, grid_spacing)
+    v_pp_hh_list, v_hh_hh_list, v_pp_pp_list, v_ph_ph_list, f_h_list, f_p_list, f_sign_sum_list, t_2_list = matrix_setup(n_max, A_magic, en_magic, grid_spacing)
     np.save("v_pp_hh-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", v_pp_hh_list)
     np.save("v_hh_hh-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", v_hh_hh_list)
     np.save("v_pp_pp-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", v_pp_pp_list)
+    #np.save("v_ph_ph-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", v_ph_ph_list)
+    np.save("f_h-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", f_h_list)
+    np.save("f_p-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", f_p_list)
+    np.save("f_sign_sum-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", f_sign_sum_list)
+    np.save("t_2-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", t_2_list)
 
 
 def load_matrices(n_max, A_magic, en_magic, grid_spacing):
     v_pp_hh_list = np.load("v_pp_hh-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")
     v_hh_hh_list = np.load("v_hh_hh-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")
-    v_pp_pp_list = np.load("v_pp_pp-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")    
-    return v_pp_hh_list, v_hh_hh_list, v_pp_pp_list
+    v_pp_pp_list = np.load("v_pp_pp-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")   
+    #v_ph_ph_list = np.load("v_ph_ph-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")  
+    v_ph_ph_list = [] #as it is not needed anywhere
+    f_h_list = np.load("f_h-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")
+    f_p_list = np.load("f_p-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")
+    f_sign_sum_list = np.load("f_sign_sum-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")
+    t_2_list = np.load("t_2-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")
+    return v_pp_hh_list, v_hh_hh_list, v_pp_pp_list, v_ph_ph_list, f_h_list, f_p_list, f_sign_sum_list, t_2_list
 
-make_tp_states(n_max, A_magic, en_magic)
-#com_momenta, hh_channel_states, pp_channel_states = load_tp_states(n_max, A_magic, en_magic)
-#v_pp_hh_list, v_hh_hh_list, v_pp_pp_list = load_matrices(n_max, A_magic, en_magic, grid_spacing)
 
-#print(com_momenta)
-#print(hh_channel_states)
+#
 
+com_momenta, hh_channel_states, pp_channel_states, ph_com_momenta, ph_channel_states = load_tp_states(n_max, A_magic, en_magic)
+v_pp_hh_list, v_hh_hh_list, v_pp_pp_list, v_ph_ph_list, f_h_list, f_p_list, f_sign_sum_list, t_2_list = load_matrices(n_max, A_magic, en_magic, grid_spacing)
+r_factor, s_factor, r_exp, s_exp, q_square_factor, f_factor = give_minnesota_constants(grid_spacing)
+
+print(com_momenta)
+print(len(com_momenta))
+print(hh_channel_states[0:2])
+print(t_2_list[0])
 
 #save_tp_states(n_max, A_magic, en_magic)
 #save_matrices(n_max, A_magic, en_magic, grid_spacing)
 
-#r_factor, s_factor, r_exp, s_exp, q_square_factor = give_minnesota_constants(grid_spacing)
-#pls = give_neutron_minnesota_V(np.array([1,0,1]),1,-1,np.array([-1,0,0]),1,-1, r_factor,s_factor, r_exp,s_exp, q_square_factor)
-#print(pls)
-#pls = give_neutron_minnesota_V(np.array([1,0,1]),1,-1,np.array([1,0,0]),-1,1, r_factor,s_factor, r_exp,s_exp, q_square_factor)
-#print(pls)
+
