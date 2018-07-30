@@ -4,7 +4,7 @@ import math
 
 #hbarc = 197.32697
 A_magic = 14
-en_magic = 1 #maximal k**2 for states within A_magic
+en_magic = 1 #maximal k**2 (k_Fermi) for states within A_magic
 density = 0.1
 grid_spacing = (A_magic / density) ** (1/3)
 momentum_cutoff = (2*0.465) ** (1/2)
@@ -55,10 +55,11 @@ def make_sp_states(n_max, A_magic, en_magic):
 
 
 def make_tp_states(n_max, A_magic, en_magic):
-    """This makes all hole and particle two-body states."""
+    """This makes all needed hole and particle two-body states."""
     hole_sp_states, prt_sp_states = make_sp_states(n_max, A_magic, en_magic)
     
-    hh_states = np.zeros(shape=( A_magic*(A_magic-1) ,8)) #this is a list of all hh states with center-of-mass and relative momentum
+    #hh:
+    hh_states = np.zeros(shape=( A_magic*(A_magic-1) ,8), dtype=int) #this is a list of all hh states with center-of-mass and relative momentum
     k = 0
     for i in range(A_magic):
         for j in range(A_magic):
@@ -70,14 +71,14 @@ def make_tp_states(n_max, A_magic, en_magic):
                 hh_states[k, 7] = hole_sp_states[j, 3]
                 k += 1
     
-    com_momenta = np.zeros(shape=(0 ,7), dtype=int) #this a list of center-of-mass momenta of all hh states; the last entry will later contain the number of correponding states
+    com_momenta = np.zeros(shape=(0 ,7), dtype=int) #this a list of center-of-mass momenta of all hh states; the last entries will later contain the number of correponding states
     for n_x in range(-n_max, n_max+1):
         for n_y in range(-n_max, n_max+1):
             for n_z in range(-n_max, n_max+1):
                 if abs(n_x) + abs(n_y) + abs(n_z) <= 2*en_magic**(1/2):
                     com_momenta = np.append(com_momenta,[[n_x,n_y,n_z,0,0,0,0]],axis=0)
     
-    hh_channel_states = np.zeros(shape=( A_magic*(A_magic-1) ,5)) #this is a list of all hh states with relative momentum, where the states are sorted according to their total momentum (channel)
+    hh_channel_states = np.zeros(shape=( A_magic*(A_magic-1) ,5), dtype=int) #this is a list of all hh states with relative momentum, where the states are sorted according to their total momentum (channel)
     l = 0
     for i in range(len(com_momenta)):
         old_l = l
@@ -88,6 +89,7 @@ def make_tp_states(n_max, A_magic, en_magic):
         com_momenta[i,3] = round(old_l,0) #position in hh_channel_states where the states corresponding to the center-of-mass momentum in com_momenta[i,0:3] starts
         com_momenta[i,4] = round(l - old_l,0) #number of states in hh_channel_states corresponding to this channel
     
+    #pp:
     pp_channel_states = np.zeros(shape=(0 ,5), dtype=int) #this is a list of all pp states with relative momentum, where the states are sorted according to their total momentum (channel)
     l = 0
     for k in range(len(com_momenta)):#for every hole-hole center-of-mass momentum ...
@@ -105,35 +107,52 @@ def make_tp_states(n_max, A_magic, en_magic):
                         l += 1       
         com_momenta[k,5] = old_l #position in pp_channel_states where the states corresponding to the center-of-mass momentum in com_momenta[i,0:3] starts
         com_momenta[k,6] = l - old_l #number of states in pp_channel_states corresponding to this channel
-        
-    ph_channel_states = np.zeros(shape=(0 ,5), dtype=int) #this is a list of all ph states with relative momentum, where the states are sorted according to their total momentum (channel)
+    
+    #ph:
+    ph_com_momenta = np.zeros(shape=(0 ,5), dtype=int) #this a list of center-of-mass momenta of all ph states; the last entries will later contain the number of correponding states    
+    ph_states = np.zeros(shape=( A_magic*(grid_dim(n_max) - A_magic) ,8)) #this is a list of all ph states with center-of-mass and relative momentum
+    k = 0
+    for i in range(grid_dim(n_max) - A_magic):
+        for j in range(A_magic):
+            current_ph_com_momentum = prt_sp_states[i,0:3] + hole_sp_states[j,0:3]
+            for coord in range(3):
+                ph_states[k, coord] = current_ph_com_momentum[coord] #first 3 entries of ph_states are the center-of-mass momentum
+                ph_states[k, coord+3] = prt_sp_states[i, coord] - hole_sp_states[j, coord] #next 3 entries are 2 * relative momentum
+            ph_states[k, 6] = prt_sp_states[i, 3]
+            ph_states[k, 7] = hole_sp_states[j, 3]
+            k += 1
+            ph_com_momentum_found = False
+            for l in range(len(ph_com_momenta)):
+                if np.array_equal(current_ph_com_momentum,ph_com_momenta[l,0:3]):
+                    ph_com_momentum_found = True
+                    break
+            if ph_com_momentum_found == False:
+                ph_com_momenta = np.append(ph_com_momenta, [np.concatenate((current_ph_com_momentum,[0,0]))], axis=0)      
+                       
+    ph_channel_states = np.zeros(shape=( A_magic*(grid_dim(n_max) - A_magic) ,5), dtype=int) #this is a list of all ph states with relative momentum, where the states are sorted according to their total momentum (channel)
     l = 0
-    for k in range(len(com_momenta)):#for every hole-hole center-of-mass momentum ...
+    for i in range(len(ph_com_momenta)):
         old_l = l
-        for i in range(grid_dim(n_max) - A_magic): #...and every single-particle state...
-            for j in range(grid_dim(n_max) - A_magic): #...and every other single-particle state...
-                if j != i: 
-                    current_pp_com_momentum = prt_sp_states[i, 0:3] + prt_sp_states[j, 0:3] #...check if the single-particle states can form this center-of-mass momentum;...
-                    if np.array_equal(current_pp_com_momentum, com_momenta[k,0:3]):#...if that is true, write the corresponding relative momentum in the correct channel   
-                        append_array = np.zeros(5)
-                        append_array[0:3] = prt_sp_states[i, 0:3] - prt_sp_states[j, 0:3]
-                        append_array[3] = prt_sp_states[i, 3]
-                        append_array[4] = prt_sp_states[j, 3]    
-                        pp_channel_states = np.append(pp_channel_states,[append_array],axis=0)    
-                        l += 1       
-        com_momenta[k,5] = old_l #position in pp_channel_states where the states corresponding to the center-of-mass momentum in com_momenta[i,0:3] starts
-        com_momenta[k,6] = l - old_l #number of states in pp_channel_states corresponding to this channel
-
-    #print(com_momenta)                                   
-    return com_momenta, hh_channel_states, pp_channel_states
+        for st in ph_states: 
+            if np.array_equal(st[0:3],ph_com_momenta[i,0:3]):
+                ph_channel_states[l] = st[3:8]
+                l += 1
+        ph_com_momenta[i,3] = round(old_l,0) #position in ph_channel_states where the states corresponding to the center-of-mass momentum in ph_com_momenta[i,0:3] starts
+        ph_com_momenta[i,4] = round(l - old_l,0) #number of states in ph_channel_states corresponding to this channel
+        
+    print(com_momenta)        
+    print(ph_com_momenta)                                   
+    return com_momenta, hh_channel_states, pp_channel_states, ph_com_momenta, ph_channel_states
 
 
 def save_tp_states(n_max, A_magic, en_magic): 
     """This function saves calculated hh and pp states. They can be loaded with load_tp_states, which is much faster than recalculating them again."""
-    com_momenta, hh_channel_states, pp_channel_states = make_tp_states(n_max, A_magic, en_magic)
+    com_momenta, hh_channel_states, pp_channel_states, ph_com_momenta, ph_channel_states = make_tp_states(n_max, A_magic, en_magic)
     np.save("com_momenta-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+".npy", com_momenta)
     np.save("hh_channel_states-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+".npy", hh_channel_states)
     np.save("pp_channel_states-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+".npy", pp_channel_states)
+    np.save("ph_com_momenta-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+".npy", ph_com_momenta)
+    np.save("ph_channel_states-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+".npy", ph_channel_states)
 
 
 def load_tp_states(n_max, A_magic, en_magic):
@@ -208,8 +227,8 @@ def load_matrices(n_max, A_magic, en_magic, grid_spacing):
     v_pp_pp_list = np.load("v_pp_pp-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")    
     return v_pp_hh_list, v_hh_hh_list, v_pp_pp_list
 
-
-com_momenta, hh_channel_states, pp_channel_states = load_tp_states(n_max, A_magic, en_magic)
+make_tp_states(n_max, A_magic, en_magic)
+#com_momenta, hh_channel_states, pp_channel_states = load_tp_states(n_max, A_magic, en_magic)
 #v_pp_hh_list, v_hh_hh_list, v_pp_pp_list = load_matrices(n_max, A_magic, en_magic, grid_spacing)
 
 #print(com_momenta)
@@ -219,8 +238,8 @@ com_momenta, hh_channel_states, pp_channel_states = load_tp_states(n_max, A_magi
 #save_tp_states(n_max, A_magic, en_magic)
 #save_matrices(n_max, A_magic, en_magic, grid_spacing)
 
-r_factor, s_factor, r_exp, s_exp, q_square_factor = give_minnesota_constants(grid_spacing)
-pls = give_neutron_minnesota_V(np.array([1,0,1]),1,-1,np.array([-1,0,0]),1,-1, r_factor,s_factor, r_exp,s_exp, q_square_factor)
-print(pls)
-pls = give_neutron_minnesota_V(np.array([1,0,1]),1,-1,np.array([1,0,0]),-1,1, r_factor,s_factor, r_exp,s_exp, q_square_factor)
-print(pls)
+#r_factor, s_factor, r_exp, s_exp, q_square_factor = give_minnesota_constants(grid_spacing)
+#pls = give_neutron_minnesota_V(np.array([1,0,1]),1,-1,np.array([-1,0,0]),1,-1, r_factor,s_factor, r_exp,s_exp, q_square_factor)
+#print(pls)
+#pls = give_neutron_minnesota_V(np.array([1,0,1]),1,-1,np.array([1,0,0]),-1,1, r_factor,s_factor, r_exp,s_exp, q_square_factor)
+#print(pls)
