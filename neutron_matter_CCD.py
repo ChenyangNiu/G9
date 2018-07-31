@@ -2,17 +2,12 @@
 import numpy as np
 import math
 
-hbarc = 197.32697
-mass = 939.56541 #neutron mass
-A_magic = 14
-en_magic = 1 #maximal k**2 (k_Fermi) for states within A_magic
-density = 0.1
-grid_spacing = (A_magic / density) ** (1/3)
-momentum_cutoff = (2*0.465) ** (1/2)
-n_max = 2
+hbarc = 197.33 #197.32697
+mass = 938.92 #939.56541 #neutron mass
+momentum_cutoff = (2*0.465) ** (1/2) #Minnesota momentum cutoff
 
 
-def check_n_max(n_max):
+def check_n_max(n_max, momentum_cutoff):
     if 2 * math.pi * n_max / grid_spacing <= 1.5 * momentum_cutoff:
         print("n_max is too small")
         
@@ -72,11 +67,17 @@ def make_tp_states(n_max, A_magic, en_magic):
                 k += 1
     
     com_momenta = np.zeros(shape=(0 ,7), dtype=int) #this a list of center-of-mass momenta of all hh states; the last entries will later contain the number of correponding states
-    for n_x in range(-n_max, n_max+1):
-        for n_y in range(-n_max, n_max+1):
-            for n_z in range(-n_max, n_max+1):
+    n_magic = math.ceil(en_magic**(1/2))
+    for n_x in range(-2*n_magic, 2*n_magic+1):
+        for n_y in range(-2*n_magic, 2*n_magic+1):
+            for n_z in range(-2*n_magic, 2*n_magic+1):
                 if abs(n_x) + abs(n_y) + abs(n_z) <= 2*en_magic**(1/2):
                     com_momenta = np.append(com_momenta,[[n_x,n_y,n_z,0,0,0,0]],axis=0)
+     #for n_x in range(-n_max, n_max+1):  #old
+        #for n_y in range(-n_max, n_max+1):
+            #for n_z in range(-n_max, n_max+1):
+                #if abs(n_x) + abs(n_y) + abs(n_z) <= 2*en_magic**(1/2):
+                    #com_momenta = np.append(com_momenta,[[n_x,n_y,n_z,0,0,0,0]],axis=0)
     
     hh_channel_states = np.zeros(shape=( A_magic*(A_magic-1) ,5), dtype=int) #this is a list of all hh states with relative momentum, where the states are sorted according to their total momentum (channel)
     l = 0
@@ -182,7 +183,7 @@ def give_neutron_minnesota_V(bra_rel_numbers,bra_s_1,bra_s_2,ket_rel_numbers,ket
         q_mi_square = q_square_factor * np.einsum('i,i->', (bra_rel_numbers - ket_rel_numbers), (bra_rel_numbers - ket_rel_numbers))
         q_pl_square = q_square_factor * np.einsum('i,i->', (bra_rel_numbers + ket_rel_numbers), (bra_rel_numbers + ket_rel_numbers))
         return (r_factor * math.exp(- q_mi_square * r_exp) + s_factor * math.exp(- q_mi_square * s_exp) 
-                + r_factor * math.exp(- q_pl_square * r_exp) + s_factor * math.exp(- q_pl_square * s_exp)) #antisymmetrized matrix element
+                + r_factor * math.exp(- q_pl_square * r_exp) + s_factor * math.exp(- q_pl_square * s_exp))/2 #antisymmetrized matrix element
     else: # then automatically bra_s_1 == ket_s_2 and bra_s_2 == ket_s_1 holds
         return - give_neutron_minnesota_V(bra_rel_numbers,bra_s_2,bra_s_1,ket_rel_numbers,ket_s_1,ket_s_2, r_factor,s_factor, r_exp,s_exp, q_square_factor)   
 
@@ -196,6 +197,10 @@ def give_sp_f(com_numbers, state_numbers, which_spin_number, r_factor, s_factor,
     for st in hole_sp_states: 
         pot_sum_energy += give_neutron_minnesota_V(st[0:3] - sp_momentum_numbers, st[3], state_numbers[which_spin_number + 3], st[0:3] - sp_momentum_numbers, st[3], state_numbers[which_spin_number + 3], r_factor,s_factor, r_exp,s_exp, q_square_factor)
     return kin_energy + pot_sum_energy        
+
+
+def give_sp_e(sp_momentum_numbers, e_factor):
+    return e_factor * np.einsum('i,i->', sp_momentum_numbers, sp_momentum_numbers)  
     
 
 def matrix_setup(n_max, A_magic, en_magic, grid_spacing):
@@ -263,41 +268,115 @@ def matrix_setup(n_max, A_magic, en_magic, grid_spacing):
 def save_matrices(n_max, A_magic, en_magic, grid_spacing):
     """This function saves calculated matrices. They can be loaded with load_matrices, which is much faster than recalculating them again."""
     v_pp_hh_list, v_hh_hh_list, v_pp_pp_list, v_ph_ph_list, f_h_list, f_p_list, f_sign_sum_list, t_2_list = matrix_setup(n_max, A_magic, en_magic, grid_spacing)
-    np.save("v_pp_hh-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", v_pp_hh_list)
-    np.save("v_hh_hh-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", v_hh_hh_list)
-    np.save("v_pp_pp-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", v_pp_pp_list)
-    #np.save("v_ph_ph-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", v_ph_ph_list)
-    np.save("f_h-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", f_h_list)
-    np.save("f_p-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", f_p_list)
-    np.save("f_sign_sum-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", f_sign_sum_list)
-    np.save("t_2-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy", t_2_list)
+    hun_grid_spacing = int(100*grid_spacing)
+    np.save("v_pp_hh-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(hun_grid_spacing))+".npy", v_pp_hh_list)
+    np.save("v_hh_hh-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(hun_grid_spacing))+".npy", v_hh_hh_list)
+    np.save("v_pp_pp-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(hun_grid_spacing))+".npy", v_pp_pp_list)
+    #np.save("v_ph_ph-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(hun_grid_spacing))+".npy", v_ph_ph_list)
+    np.save("f_h-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(hun_grid_spacing))+".npy", f_h_list)
+    np.save("f_p-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(hun_grid_spacing))+".npy", f_p_list)
+    np.save("f_sign_sum-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(hun_grid_spacing))+".npy", f_sign_sum_list)
+    np.save("t_2-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(hun_grid_spacing))+".npy", t_2_list)
 
 
 def load_matrices(n_max, A_magic, en_magic, grid_spacing):
-    v_pp_hh_list = np.load("v_pp_hh-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")
-    v_hh_hh_list = np.load("v_hh_hh-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")
-    v_pp_pp_list = np.load("v_pp_pp-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")   
+    hun_grid_spacing = int(100*grid_spacing)
+    v_pp_hh_list = np.load("v_pp_hh-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(hun_grid_spacing))+".npy")
+    v_hh_hh_list = np.load("v_hh_hh-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(hun_grid_spacing))+".npy")
+    v_pp_pp_list = np.load("v_pp_pp-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(hun_grid_spacing))+".npy")   
     #v_ph_ph_list = np.load("v_ph_ph-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")  
     v_ph_ph_list = [] #as it is not needed anywhere
-    f_h_list = np.load("f_h-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")
-    f_p_list = np.load("f_p-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")
-    f_sign_sum_list = np.load("f_sign_sum-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")
-    t_2_list = np.load("t_2-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(grid_spacing))+".npy")
+    f_h_list = np.load("f_h-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(hun_grid_spacing))+".npy")
+    f_p_list = np.load("f_p-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(hun_grid_spacing))+".npy")
+    f_sign_sum_list = np.load("f_sign_sum-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(hun_grid_spacing))+".npy")
+    t_2_list = np.load("t_2-n_max_"+str(n_max)+"-A_magic_"+str(A_magic)+"-grid_spacing_"+str(int(hun_grid_spacing))+".npy")
     return v_pp_hh_list, v_hh_hh_list, v_pp_pp_list, v_ph_ph_list, f_h_list, f_p_list, f_sign_sum_list, t_2_list
 
 
+def hartree_fock_energy(n_max, A_magic, en_magic, grid_spacing):
+    hole_sp_states, prt_sp_states = make_sp_states(n_max, A_magic, en_magic)
+    com_momenta, hh_channel_states, pp_channel_states, ph_com_momenta, ph_channel_states = load_tp_states(n_max, A_magic, en_magic)
+    v_pp_hh_list, v_hh_hh_list, v_pp_pp_list, v_ph_ph_list, f_h_list, f_p_list, f_sign_sum_list, t_2_list = load_matrices(n_max, A_magic, en_magic, grid_spacing)
+    r_factor, s_factor, r_exp, s_exp, q_square_factor, f_factor = give_minnesota_constants(grid_spacing)
+    no_of_com_momenta = len(com_momenta)
+    
+    e_factor = 2/mass * (hbarc * math.pi /grid_spacing)**2
+    
+    kin_energy = 0
+    pot_energy = 0
+    for i in range(len(hole_sp_states)):    
+        kin_energy += give_sp_e(hole_sp_states[i,:3], e_factor)
+    for i in range(no_of_com_momenta):
+        for j in range(com_momenta[i,3],com_momenta[i,3]+com_momenta[i,4]):
+                pot_energy += v_hh_hh_list[i][j - int(com_momenta[i,3]), j - int(com_momenta[i,3])]/2
+    
+    return kin_energy + pot_energy
+
+
+def give_next_t_2(t_2_list, v_pp_hh_list, v_hh_hh_list, v_pp_pp_list, f_h_list, f_p_list, f_sign_sum_list, no_of_com_momenta, mixing):
+    """gives back resulting t_2 from one CCD iteration (only including the first five diagrams)"""
+    h_bar_list = [0] * no_of_com_momenta #This is a list with zeros only (no_of_com_momenta many)
+    delta_t_2_list = [0] * no_of_com_momenta
+    print(t_2_list[0][228:230])
+    for i in range(no_of_com_momenta): #The following lines contain the first five diagrams of the unnumbered equation on top of p. 25 in CCM-minted.pdf      
+        h_bar_list[i] = (v_pp_hh_list[i]  
+                + np.einsum('b,bi->bi',f_p_list[i][:,1],t_2_list[i]) + np.einsum('a,ai->ai',f_p_list[i][:,0],t_2_list[i]) #this uses t^ba_ij = -t^ab_ij
+                - np.einsum('j,aj->aj',f_h_list[i][:,1],t_2_list[i]) - np.einsum('i,ai->ai',f_h_list[i][:,0],t_2_list[i]) 
+                + 1/2 * np.einsum('ac,ci->ai',v_pp_pp_list[i],t_2_list[i]) 
+                + 1/2 * np.einsum('ki,ak->ai',v_hh_hh_list[i],t_2_list[i]) 
+               )   
+        delta_t_2_list[i] = h_bar_list[i] / f_sign_sum_list[i]
+        t_2_list[i] = t_2_list[i] + mixing * delta_t_2_list[i]
+    print(t_2_list[0][228:230])
+    return t_2_list
+    
+ 
+def recursion(accuracy, maxit, t_2_list, E_C, it_no, v_pp_hh_list, v_hh_hh_list, v_pp_pp_list, v_ph_ph_list, f_h_list, f_p_list, f_sign_sum_list, no_of_com_momenta, mixing):
+    """calls give_next_t_2 until the resulting energy doesn't change more than specified with accuracy"""
+    E_C_old = E_C #set E_C_old to last E_C value
+    t_2_list = give_next_t_2(t_2_list, v_pp_hh_list, v_hh_hh_list, v_pp_pp_list, f_h_list, f_p_list, f_sign_sum_list, no_of_com_momenta, mixing) #calculate new iteration for t_2
+    E_C = 0
+    for i in range(no_of_com_momenta):
+        E_C += 1/4 * np.einsum('ai,ai->',v_pp_hh_list[i],t_2_list[i]) #calculate new value for E_C
+    if abs(E_C - E_C_old) < accuracy: #stop recursion when desired accuracy is reached
+        print("  After ", it_no , "recursion steps the following result is reached by CCD:" , E_C)
+        print("  The residuum is" , E_C - E_C_old)
+        return E_C 
+    elif it_no > maxit: #stop recursion when set value of maximal iterations is exceeded
+        print("  Number of iterations exceeds set value maxit = ", maxit)
+        print("  Unconverged result is:", E_C)
+    else: #otherwise continue recursion
+        it_no += 1
+        #print(E_C)
+        return recursion(accuracy, maxit, t_2_list, E_C, it_no, v_pp_hh_list, v_hh_hh_list, v_pp_pp_list, v_ph_ph_list, f_h_list, f_p_list, f_sign_sum_list, no_of_com_momenta, mixing)    
+
+    
+def pairing_ccd_main(n_max, A_magic, en_magic, grid_spacing, accuracy, maxit, mixing):
+    """main function for CCD calculation for the pairing model"""
+    check_n_max(n_max, momentum_cutoff) #check if n_max is appropriate
+    v_pp_hh_list, v_hh_hh_list, v_pp_pp_list, v_ph_ph_list, f_h_list, f_p_list, f_sign_sum_list, t_2_list = load_matrices(n_max, A_magic, en_magic, grid_spacing)
+    no_of_com_momenta = len(t_2_list)    
+    E_C = 1000    
+    res_E_C = recursion(accuracy, maxit, t_2_list, E_C, 0, v_pp_hh_list, v_hh_hh_list, v_pp_pp_list, v_ph_ph_list, f_h_list, f_p_list, f_sign_sum_list, no_of_com_momenta, mixing)
+    #print(res_E_C)
+    return res_E_C    
+
 #
 
-com_momenta, hh_channel_states, pp_channel_states, ph_com_momenta, ph_channel_states = load_tp_states(n_max, A_magic, en_magic)
-v_pp_hh_list, v_hh_hh_list, v_pp_pp_list, v_ph_ph_list, f_h_list, f_p_list, f_sign_sum_list, t_2_list = load_matrices(n_max, A_magic, en_magic, grid_spacing)
-r_factor, s_factor, r_exp, s_exp, q_square_factor, f_factor = give_minnesota_constants(grid_spacing)
+A_magic = 14
+en_magic = 1 #maximal k**2 (k_Fermi) for states within A_magic
+density = 0.08
+grid_spacing = (A_magic / density) ** (1/3)
+n_max = 2
 
-print(com_momenta)
-print(len(com_momenta))
-print(hh_channel_states[0:2])
-print(t_2_list[0])
-
+#important: when running the code for the first time for given n_max, one has to uncomment the following two lines:
 #save_tp_states(n_max, A_magic, en_magic)
 #save_matrices(n_max, A_magic, en_magic, grid_spacing)
+
+test = pairing_ccd_main(n_max, A_magic, en_magic, grid_spacing, 10**(-6), 100, 1)
+print(test / A_magic)
+
+print(hartree_fock_energy(n_max, A_magic, en_magic, grid_spacing)/A_magic)
+
 
 
